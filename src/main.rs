@@ -1,29 +1,12 @@
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
-use actix_web::get;
-
+use actix_web::{web, App, Responder};
 
 fn index() -> impl Responder {
-    HttpResponse::Ok().body("Hello world!")
+    "Hello world!"
 }
 
-fn index2() -> impl Responder {
-    HttpResponse::Ok().body("Hello world again!")
-}
-
-#[get("/hello")]
-fn index3() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
-}
-
-fn main() {
-    HttpServer::new(|| {
-        App::new()
-            .route("/", web::get().to(index))
-            .route("/again", web::get().to(index2))
-            .service(index3)
-    })
-    .bind("127.0.0.1:8088")
-    .unwrap()
-    .run()
-    .unwrap();
+#[rustfmt::skip]
+pub fn main() {
+    App::new().service(
+        web::scope("/app")
+            .route("/index.html", web::get().to(index)));
 }
