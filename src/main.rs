@@ -5,6 +5,7 @@ struct AppStateWithCounter {
     counter: Mutex<i32>, // <- Mutex is necessary to mutate safely across threads
 }
 
+
 fn incr_counter(data: &web::Data<AppStateWithCounter>) {
     let mut counter = data.counter.lock().unwrap(); // <- get counter's MutexGuard
     *counter += 1; // <- access counter inside MutexGuard
