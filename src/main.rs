@@ -1,39 +1,43 @@
-use actix_web::{web, App, HttpServer};
-use std::sync::Mutex;
+use actix_web::{Error, HttpRequest, HttpResponse, Responder};
+use serde::Serialize;
+use futures::future::{ok, Future};
 
-struct AppStateWithCounter {
-    counter: Mutex<i32>, // <- Mutex is necessary to mutate safely across threads
+#[derive(Serialize)]
+struct MyObj {
+    name: &'static str,
 }
 
-fn incr_counter(data: &web::Data<AppStateWithCounter>) {
-    let mut counter = data.counter.lock().unwrap(); // <- get counter's MutexGuard
-    *counter += 1; // <- access counter inside MutexGuard
+// Responder
+impl Responder for MyObj {
+    type Error = Error;
+    type Future = Result<HttpResponse, Error>;
+
+    fn respond_to(self, _req: &HttpRequest) -> Self::Future {
+        let body = serde_json::to_string(&self)?;
+
+        // Create response and set content type
+        Ok(HttpResponse::Ok()
+            .content_type("application/json")
+            .body(body))
+    }
 }
 
-fn _index(data: web::Data<AppStateWithCounter>) -> String {
-    incr_counter(&data);
-    let counter = data.counter.lock().unwrap(); // <- get counter's MutexGuard
-
-    format!("Request number: {}", counter) // <- response with count
+fn index() -> impl Responder {
+    MyObj { name: "user" }
 }
 
-fn _hello(data: web::Data<AppStateWithCounter>) -> String {
-    incr_counter(&data);
-       
-    format!("hello") // <- response with count
+fn index2() -> Box<dyn Future<Item = &'static str, Error = Error>> {
+    Box::new(ok::<_, Error>("Welcome!"))
 }
-
 
 fn main() {
-    let counter = web::Data::new(AppStateWithCounter {
-        counter: Mutex::new(0),
-    });
-    HttpServer::new(move || {
-    App::new()
-        .register_data(counter.clone()) // <- register the created data
-        .route("/", web::get().to(_index))
-        .route("/hello", web::get().to(_hello))
-        })
+    use actix_web::{web, App, HttpServer};
+
+    HttpServer::new(|| {
+        App::new()
+            .route("/users", web::get().to(index))
+            .route("/", web::get().to(index2))
+    })
     .bind("127.0.0.1:8088")
     .unwrap()
     .run()
