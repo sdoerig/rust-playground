@@ -5,14 +5,23 @@ use futures::stream::once;
 use serde::Serialize;
 
 #[derive(Debug,Serialize)]
-pub struct MyObj {
-    name: &'static str
+pub struct MyObj<'a> {
+    name: &'a str,
+    likes: Vec<MyLikes<'a>>
+}
+#[derive(Debug,Serialize)]
+pub struct MyLikes<'a> {
+    name: &'a str,
+
 }
 
-impl MyObj {
+impl<'a> MyObj<'a> {
+    pub fn new(name: &'a str) -> Self {
+        MyObj{name: name, likes: Vec::new()}
+    }
 
-    pub fn new(name: &'static str) -> Self {
-        MyObj{name: name}
+    pub fn likes(&mut self, like: &'a str) {
+        self.likes.push(MyLikes{name: like})
     }
 
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
@@ -21,7 +30,9 @@ impl MyObj {
 }
 
 fn index() -> HttpResponse {
-    let my_user = MyObj::new("stefan");
+    let mut my_user = MyObj::new("stefan");
+    my_user.likes("pizza");
+    my_user.likes("salad");
     let body = match my_user.to_json() {
         Ok(_json) => once::<Bytes, Error>(Ok(Bytes::from( _json.as_bytes() ))),
         Err(_e) => once::<Bytes, Error>(Ok(Bytes::from( "error".as_bytes() ))),
