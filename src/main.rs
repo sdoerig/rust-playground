@@ -1,7 +1,6 @@
 use actix_web::{Error, HttpResponse};
 use bytes::Bytes;
 use futures::stream::once;
-
 use serde::Serialize;
 
 #[derive(Debug,Serialize)]
@@ -9,10 +8,10 @@ pub struct MyObj<'a> {
     name: &'a str,
     likes: Vec<MyLikes<'a>>
 }
+
 #[derive(Debug,Serialize)]
 pub struct MyLikes<'a> {
     name: &'a str,
-
 }
 
 impl<'a> MyObj<'a> {
