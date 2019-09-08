@@ -6,25 +6,13 @@ use serde::Serialize;
 
 #[derive(Debug,Serialize)]
 pub struct MyObj {
-    name: &'static str,
-    bytes: &'static [u8]
+    name: &'static str
 }
 
 impl MyObj {
 
     pub fn new(name: &'static str) -> Self {
-        MyObj{name: name, bytes: &[]}
-    }
-
-    pub fn bytes(&mut self) -> &'static [u8] {
-        let self_serialized = serde_json::to_string(self);
-        match self_serialized {
-            Ok(_json) =>
-                self.bytes = b"{\"ok\": 1}" ,
-            Err(_e) => 
-                self.bytes = b"{\"nok\": 0}"
-        };
-        self.bytes
+        MyObj{name: name}
     }
 
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
@@ -32,11 +20,12 @@ impl MyObj {
     }
 }
 
-
-
 fn index() -> HttpResponse {
-    let mut my_user = MyObj::new("stefan");
-    let body = once::<Bytes, Error>(Ok(Bytes::from_static( my_user.bytes() )));
+    let my_user = MyObj::new("stefan");
+    let body = match my_user.to_json() {
+        Ok(_json) => once::<Bytes, Error>(Ok(Bytes::from( _json.as_bytes() ))),
+        Err(_e) => once::<Bytes, Error>(Ok(Bytes::from( "error".as_bytes() ))),
+    };
 
     HttpResponse::Ok()
         .content_type("application/json")
