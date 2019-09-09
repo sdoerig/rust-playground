@@ -2,25 +2,33 @@ use actix_web::{Error, HttpResponse};
 use bytes::Bytes;
 use futures::stream::once;
 use serde::Serialize;
+use chrono::{DateTime, Utc};
+
+
 
 #[derive(Debug,Serialize)]
-pub struct MyObj<'a> {
+pub struct MyUser<'a> {
     name: &'a str,
-    likes: Vec<MyLikes<'a>>
+    created_at: String,
+    likes: Vec<Likes<'a>>
 }
 
 #[derive(Debug,Serialize)]
-pub struct MyLikes<'a> {
+pub struct Likes<'a> {
     name: &'a str,
 }
 
-impl<'a> MyObj<'a> {
+impl<'a> MyUser<'a> {
     pub fn new(name: &'a str) -> Self {
-        MyObj{name: name, likes: Vec::new()}
+        let now: DateTime<Utc> = Utc::now();
+        MyUser{
+            name: name, 
+            created_at: now.to_rfc2822(), 
+            likes: Vec::new()}
     }
 
     pub fn likes(&mut self, like: &'a str) {
-        self.likes.push(MyLikes{name: like})
+        self.likes.push(Likes{name: like})
     }
 
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
@@ -29,7 +37,7 @@ impl<'a> MyObj<'a> {
 }
 
 fn index() -> HttpResponse {
-    let mut my_user = MyObj::new("stefan");
+    let mut my_user = MyUser::new("stefan");
     my_user.likes("pizza");
     my_user.likes("salad");
     let body = match my_user.to_json() {
