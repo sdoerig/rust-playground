@@ -4,7 +4,7 @@ use futures::stream::once;
 use futures::stream::Once;
 use serde::Serialize;
 use chrono::{DateTime, Utc};
-use actix_web::{web, Result};
+use actix_web::{web};
 
 
 #[derive(Debug,Serialize)]
@@ -76,7 +76,7 @@ fn user(info: web::Path<(u32, String)>) -> HttpResponse {
 
 
 pub fn main() {
-    use actix_web::{web, App, HttpServer};
+    use actix_web::{App, HttpServer};
 
     HttpServer::new(|| App::new()
         .route("/async", web::to_async(index))
