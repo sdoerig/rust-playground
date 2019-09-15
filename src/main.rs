@@ -1,10 +1,9 @@
-use actix_web::{Error, HttpResponse};
+use actix_web::{error, Error, web, FromRequest, HttpResponse, Responder};
 use bytes::Bytes;
 use futures::stream::once;
 use futures::stream::Once;
 use serde::{Serialize,Deserialize};
 use chrono::{DateTime, Utc};
-use actix_web::{web};
 
 
 #[derive(Debug,Serialize,Deserialize)]
@@ -44,11 +43,11 @@ impl<'a> MyUser<'a> {
             created_at: now.to_rfc2822(), 
             likes: Vec::new()}
     }
-    pub fn from_deserialized(deserialized: &'a web::Path<MyUserDeserialized>) -> Self {
+    pub fn from_deserialized(userid: u32, friend: &'a String) -> Self {
         let now: DateTime<Utc> = Utc::now();
         MyUser{
-            id: deserialized.userid,
-            name: &deserialized.friend, 
+            id: userid,
+            name: friend, 
             created_at: now.to_rfc2822(), 
             likes: Vec::new()}
     }
@@ -88,18 +87,42 @@ fn user(info: web::Path<(u32, String)>) -> HttpResponse {
 }
 
 fn user_deserialize(my_user: web::Path<MyUserDeserialized>) -> HttpResponse {
-    let my_user_resp = MyUser::from_deserialized(&my_user);
+    let my_user_resp = MyUser::from_deserialized(my_user.userid, &my_user.friend);
+    HttpResponse::Ok()
+        .content_type("application/json")
+        .streaming(Box::new(my_user_resp.to_json()))
+}
+
+/// deserialize `Info` from request's body, max payload size is 4kb
+fn user_deserialize_json(my_user: web::Json<MyUserDeserialized>) -> impl Responder {
+    let my_user_resp = MyUser::from_deserialized(my_user.userid, &my_user.friend);
     HttpResponse::Ok()
         .content_type("application/json")
         .streaming(Box::new(my_user_resp.to_json()))
 }
 
 
-
 pub fn main() {
     use actix_web::{App, HttpServer};
 
     HttpServer::new(|| App::new()
+        .service(
+            web::resource("/users_deserialize_silly")
+                .data(
+                    // change json extractor configuration
+                    web::Json::<MyUserDeserialized>::configure(|cfg| {
+                        cfg.limit(4096).error_handler(|err, _req| {
+                            // <- create custom error response
+                            error::InternalError::from_response(
+                                err,
+                                HttpResponse::Conflict().finish(),
+                            )
+                            .into()
+                        })
+                    }),
+                )
+                .route(web::post().to(user_deserialize_json)),
+        )
         .route("/async", web::to_async(index))
         .route("/users/{userid}/{friend}", // <- define path parameters
             web::get().to(user))
