@@ -1,24 +1,33 @@
 use actix_web::{Error, HttpResponse};
 use bytes::Bytes;
 use futures::stream::once;
-use serde::Serialize;
+use futures::stream::Once;
+use serde::{Serialize,Deserialize};
 use chrono::{DateTime, Utc};
+use actix_web::{web};
 
 
-#[derive(Debug,Serialize)]
+#[derive(Debug,Serialize,Deserialize)]
+pub struct MyUserDeserialized {
+    userid: u32,
+    friend: String,
+}
+
+#[derive(Debug,Serialize,Deserialize)]
 pub struct MyUser<'a> {
+    id: u32,
     name: &'a str,
     created_at: String,
     likes: Vec<Likes<'a>>
 }
 
-#[derive(Debug,Serialize)]
+#[derive(Debug,Serialize,Deserialize)]
 pub struct Likes<'a> {
     name: &'a str,
     likeness: Likeness
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize,Deserialize)]
 pub enum Likeness {
     Very,
     Ok,
@@ -27,10 +36,19 @@ pub enum Likeness {
 
 
 impl<'a> MyUser<'a> {
-    pub fn new(name: &'a str) -> Self {
+    pub fn new(id: u32, name: &'a str) -> Self {
         let now: DateTime<Utc> = Utc::now();
         MyUser{
+            id: id,
             name: name, 
+            created_at: now.to_rfc2822(), 
+            likes: Vec::new()}
+    }
+    pub fn from_deserialized(deserialized: &'a web::Path<MyUserDeserialized>) -> Self {
+        let now: DateTime<Utc> = Utc::now();
+        MyUser{
+            id: deserialized.userid,
+            name: &deserialized.friend, 
             created_at: now.to_rfc2822(), 
             likes: Vec::new()}
     }
@@ -39,30 +57,55 @@ impl<'a> MyUser<'a> {
         self.likes.push(Likes{name: like, likeness: likeness})
     }
 
-    pub fn to_json(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string(self)
+    pub fn to_json(&self) -> Once<Bytes, Error> {
+        let body = match serde_json::to_string(self) {
+            Ok(_json) => once::<Bytes, Error>(Ok(Bytes::from( _json.as_bytes() ))),
+            Err(_e) => once::<Bytes, Error>(Ok(Bytes::from( "error".as_bytes() ))),
+        };
+        body
     }
 }
 
 fn index() -> HttpResponse {
-    let mut my_user = MyUser::new("stefan");
+    let mut my_user = MyUser::new(1, "stefan");
     my_user.likes("pizza", Likeness::Very);
     my_user.likes("salad", Likeness::Very);
     my_user.likes("C#", Likeness::Hmm);
-    let body = match my_user.to_json() {
-        Ok(_json) => once::<Bytes, Error>(Ok(Bytes::from( _json.as_bytes() ))),
-        Err(_e) => once::<Bytes, Error>(Ok(Bytes::from( "error".as_bytes() ))),
-    };
 
     HttpResponse::Ok()
         .content_type("application/json")
-        .streaming(Box::new(body))
+        .streaming(Box::new(my_user.to_json()))
 }
 
-pub fn main() {
-    use actix_web::{web, App, HttpServer};
+/// extract path info from "/users/{userid}/{friend}" url
+/// {userid} -  - deserializes to a u32
+/// {friend} - deserializes to a String
+fn user(info: web::Path<(u32, String)>) -> HttpResponse {
+    let my_user = MyUser::new(info.0, &info.1);
+    HttpResponse::Ok()
+        .content_type("application/json")
+        .streaming(Box::new(my_user.to_json()))
+}
 
-    HttpServer::new(|| App::new().route("/async", web::to_async(index)))
+fn user_deserialize(my_user: web::Path<MyUserDeserialized>) -> HttpResponse {
+    let my_user_resp = MyUser::from_deserialized(&my_user);
+    HttpResponse::Ok()
+        .content_type("application/json")
+        .streaming(Box::new(my_user_resp.to_json()))
+}
+
+
+
+pub fn main() {
+    use actix_web::{App, HttpServer};
+
+    HttpServer::new(|| App::new()
+        .route("/async", web::to_async(index))
+        .route("/users/{userid}/{friend}", // <- define path parameters
+            web::get().to(user))
+        .route("/users_deserialize/{userid}/{friend}", // <- define path parameters
+            web::get().to(user_deserialize))
+        )
         .bind("127.0.0.1:8088")
         .unwrap()
         .run()
