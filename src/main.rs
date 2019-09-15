@@ -2,12 +2,12 @@ use actix_web::{Error, HttpResponse};
 use bytes::Bytes;
 use futures::stream::once;
 use futures::stream::Once;
-use serde::Serialize;
+use serde::{Serialize,Deserialize};
 use chrono::{DateTime, Utc};
 use actix_web::{web};
 
 
-#[derive(Debug,Serialize)]
+#[derive(Debug,Serialize,Deserialize)]
 pub struct MyUser<'a> {
     id: u32,
     name: &'a str,
@@ -15,13 +15,13 @@ pub struct MyUser<'a> {
     likes: Vec<Likes<'a>>
 }
 
-#[derive(Debug,Serialize)]
+#[derive(Debug,Serialize,Deserialize)]
 pub struct Likes<'a> {
     name: &'a str,
     likeness: Likeness
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize,Deserialize)]
 pub enum Likeness {
     Very,
     Ok,
@@ -73,6 +73,12 @@ fn user(info: web::Path<(u32, String)>) -> HttpResponse {
         .streaming(Box::new(my_user.to_json()))
 }
 
+fn user_deserialize(my_user: web::Path<MyUser>) -> HttpResponse {
+    HttpResponse::Ok()
+        .content_type("application/json")
+        .streaming(Box::new(my_user.to_json()))
+}
+
 
 
 pub fn main() {
@@ -81,7 +87,10 @@ pub fn main() {
     HttpServer::new(|| App::new()
         .route("/async", web::to_async(index))
         .route("/users/{userid}/{friend}", // <- define path parameters
-            web::get().to(user)))
+            web::get().to(user))
+        .route("/users_deserialize/{userid}/{friend}", // <- define path parameters
+            web::get().to(user_deserialize))
+        )
         .bind("127.0.0.1:8088")
         .unwrap()
         .run()
