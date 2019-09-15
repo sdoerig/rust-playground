@@ -8,6 +8,12 @@ use actix_web::{web};
 
 
 #[derive(Debug,Serialize,Deserialize)]
+pub struct MyUserDeserialized {
+    userid: u32,
+    friend: String,
+}
+
+#[derive(Debug,Serialize,Deserialize)]
 pub struct MyUser<'a> {
     id: u32,
     name: &'a str,
@@ -35,6 +41,14 @@ impl<'a> MyUser<'a> {
         MyUser{
             id: id,
             name: name, 
+            created_at: now.to_rfc2822(), 
+            likes: Vec::new()}
+    }
+    pub fn from_deserialized(deserialized: &'a web::Path<MyUserDeserialized>) -> Self {
+        let now: DateTime<Utc> = Utc::now();
+        MyUser{
+            id: deserialized.userid,
+            name: &deserialized.friend, 
             created_at: now.to_rfc2822(), 
             likes: Vec::new()}
     }
@@ -73,10 +87,11 @@ fn user(info: web::Path<(u32, String)>) -> HttpResponse {
         .streaming(Box::new(my_user.to_json()))
 }
 
-fn user_deserialize(my_user: web::Path<MyUser>) -> HttpResponse {
+fn user_deserialize(my_user: web::Path<MyUserDeserialized>) -> HttpResponse {
+    let my_user_resp = MyUser::from_deserialized(&my_user);
     HttpResponse::Ok()
         .content_type("application/json")
-        .streaming(Box::new(my_user.to_json()))
+        .streaming(Box::new(my_user_resp.to_json()))
 }
 
 
