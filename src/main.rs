@@ -106,8 +106,13 @@ pub fn main() {
     use actix_web::{App, HttpServer};
 
     HttpServer::new(|| App::new()
+        .route("/async", web::to_async(index))
+        .route("/users/{userid}/{friend}", // <- define path parameters
+            web::get().to(user))
+        .route("/users_deserialize/{userid}/{friend}", // <- define path parameters
+            web::get().to(user_deserialize))
         .service(
-            web::resource("/users_deserialize_silly")
+            web::resource("/users")
                 .data(
                     // change json extractor configuration
                     web::Json::<MyUserDeserialized>::configure(|cfg| {
@@ -121,13 +126,9 @@ pub fn main() {
                         })
                     }),
                 )
-                .route(web::post().to(user_deserialize_json)),
+                .route(web::post().to(user_deserialize_json))
         )
-        .route("/async", web::to_async(index))
-        .route("/users/{userid}/{friend}", // <- define path parameters
-            web::get().to(user))
-        .route("/users_deserialize/{userid}/{friend}", // <- define path parameters
-            web::get().to(user_deserialize))
+        
         )
         .bind("127.0.0.1:8088")
         .unwrap()
