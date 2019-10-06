@@ -21,17 +21,17 @@ pub struct MyUserDeserialized {
 }
 
 #[derive(Debug,Serialize,Deserialize)]
-struct MyUser<'a> {
+pub struct MyUser {
     id: u32,
-    name: &'a str,
+    name: String,
     created_at: String,
     processed_requests: usize,
-    likes: Vec<Likes<'a>>
+    likes: Vec<Likes>
 }
 
 #[derive(Debug,Serialize,Deserialize)]
-struct Likes<'a> {
-    name: &'a str,
+struct Likes {
+    name: String,
     likeness: Likeness
 }
 
@@ -43,8 +43,8 @@ enum Likeness {
 }
 
 
-impl<'a> MyUser<'a> {
-    fn new(id: u32, name: &'a str, processed_requests: usize) -> Self {
+impl MyUser {
+    fn new(id: u32, name: String, processed_requests: usize) -> Self {
         let now: DateTime<Utc> = Utc::now();
         MyUser{
             id: id,
@@ -55,7 +55,7 @@ impl<'a> MyUser<'a> {
     }
     fn from_deserialized(
             userid: u32, 
-            friend: &'a String, 
+            friend: String, 
             processed_requests: usize) -> Self {
         let now: DateTime<Utc> = Utc::now();
         MyUser{
@@ -66,7 +66,7 @@ impl<'a> MyUser<'a> {
             likes: Vec::new()}
     }
 
-    fn likes(&mut self, like: &'a str, likeness: Likeness) {
+    fn likes(&mut self, like: String, likeness: Likeness) {
         self.likes.push(Likes{name: like, likeness: likeness})
     }
 
@@ -82,10 +82,10 @@ impl<'a> MyUser<'a> {
 
 pub(crate) fn index(data: web::Data<AppState>) -> HttpResponse {
     data.count.fetch_add(1, Ordering::Relaxed);
-    let mut my_user = MyUser::new(1, "stefan", data.count.load(Ordering::Relaxed));
-    my_user.likes("pizza", Likeness::Very);
-    my_user.likes("salad", Likeness::Very);
-    my_user.likes("C#", Likeness::Hmm);
+    let mut my_user = MyUser::new(1, String::from("stefan"), data.count.load(Ordering::Relaxed));
+    my_user.likes(String::from("pizza"), Likeness::Very);
+    my_user.likes(String::from("salad"), Likeness::Very);
+    my_user.likes(String::from("C#"), Likeness::Hmm);
 
     HttpResponse::Ok()
         .content_type("application/json")
@@ -99,7 +99,7 @@ pub(crate) fn user(
         data: web::Data<AppState>, 
         info: web::Path<(u32, String)>) -> HttpResponse {
     data.count.fetch_add(1, Ordering::Relaxed);
-    let my_user = MyUser::new(info.0, &info.1, data.count.load(Ordering::Relaxed));
+    let my_user = MyUser::new(info.0, info.1.clone(), data.count.load(Ordering::Relaxed));
     HttpResponse::Ok()
         .content_type("application/json")
         .streaming(Box::new(my_user.to_json()))
@@ -109,7 +109,7 @@ pub(crate) fn user_deserialize(
         data: web::Data<AppState>, 
         my_user: web::Path<MyUserDeserialized>) -> HttpResponse {
     data.count.fetch_add(1, Ordering::Relaxed);
-    let my_user_resp = MyUser::from_deserialized(my_user.userid, &my_user.friend, data.count.load(Ordering::Relaxed));
+    let my_user_resp = MyUser::from_deserialized(my_user.userid, my_user.friend.clone(), data.count.load(Ordering::Relaxed));
     HttpResponse::Ok()
         .content_type("application/json")
         .streaming(Box::new(my_user_resp.to_json()))
@@ -122,10 +122,68 @@ pub(crate) fn user_deserialize_json(
     data.count.fetch_add(1, Ordering::Relaxed);
     let my_user_resp = MyUser::from_deserialized(
         my_user.userid, 
-        &my_user.friend,
+        my_user.friend.clone(),
         data.count.load(Ordering::Relaxed));
     HttpResponse::Ok()
         .content_type("application/json")
         .streaming(Box::new(my_user_resp.to_json()))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{test, web, App};
+
+    #[test]
+    fn test_index_to_async() {
+        let data = AppState {
+            count: Arc::new(AtomicUsize::new(0)),
+        };
+        let mut app = test::init_service(
+            App::new()
+                .data(data)
+                .route("/async", web::to_async(index)),
+        );
+        let req = test::TestRequest::get().uri("/async").to_request();
+        let resp: MyUser = test::read_response_json(&mut app, req);
+
+        assert!(resp.id == 1);
+        assert!(resp.name == "stefan");
+    }
+
+    #[test]
+    fn test_users_get() {
+        let data = AppState {
+            count: Arc::new(AtomicUsize::new(0)),
+        };
+        let mut app = test::init_service(
+            App::new()
+                .data(data)
+                .route("/users/{userid}/{friend}", web::get().to(user)),
+        );
+        let req = test::TestRequest::get().uri("/users/42/Denton").to_request();
+        let resp: MyUser = test::read_response_json(&mut app, req);
+
+        assert!(resp.id == 42);
+        assert!(resp.name == "Denton");
+    }
+
+    #[test]
+    fn test_users_deserialize_get() {
+        let data = AppState {
+            count: Arc::new(AtomicUsize::new(0)),
+        };
+        let mut app = test::init_service(
+            App::new()
+                .data(data)
+                .route("/users_deserialize/{userid}/{friend}", web::get().to(user)),
+        );
+        let req = test::TestRequest::get().uri("/users_deserialize/42/Denton").to_request();
+        let resp: MyUser = test::read_response_json(&mut app, req);
+
+        assert!(resp.id == 42);
+        assert!(resp.name == "Denton");
+    }
+
+    
+}
