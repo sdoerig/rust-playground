@@ -6,6 +6,10 @@ mod user;
 use crate::user::{index,user,user_deserialize, user_deserialize_json};
 use crate::user::{AppState,MyUserDeserialized};
 
+mod middleware;
+use crate::middleware::SayHi;
+
+
 pub fn main() {
     use actix_web::{App, HttpServer};
 
@@ -37,7 +41,7 @@ pub fn main() {
                 )
                 .guard(guard::Header("content-type", "application/json"))
                 .route(web::post().to(user_deserialize_json))
-        )
+        ).service(web::resource("/middleware").wrap(SayHi).route(web::get().to(index)))
         
         )
         .bind("127.0.0.1:8088")
